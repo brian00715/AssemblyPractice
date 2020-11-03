@@ -1,0 +1,120 @@
+Microsoft (R) Macro Assembler Version 6.11		    11/08/19 17:40:41
+tempfile.asm						     Page 1 - 1
+
+
+ 0000				data	segment  'DATA'             ; 定义数据段
+ 0000 0C 17 22 2D 38 43			ary1    db   12, 23, 34, 45, 56, 67, 78 ,89, 90, 18  
+       4E 59 5A 12
+ 000A = 000A				cont1 	equ  $ - ary1           ;令cont1为ary1的长度
+ 000A 0000			    sum1 	dw   ? 
+				    	
+ 000C 13 24 57 68 9A BC		    ary2  	db   13h, 24h, 57h, 68h ,9ah, 0bch, 0cdh, 0deh, 80h, 50h
+       CD DE 80 50
+ 0016 = 000A			   	cont2 	equ   $ - ary2
+ 0016 0000			    sum2	dw   ?
+ 0018				data 	ends                        ; 数据段结束
+
+ 0000				stack	segment  stack 'STACK'      ; 定义堆栈段，初始SP指向0100
+ 0000  0100 [			        db  256  dup (?)
+        00
+       ]
+ 0100				stack	ends                        ;堆栈段结束
+
+ 0000				code    segment    'CODE'           ; 定义代码段
+				        assume  cs:code, ds:data, ss:stack     
+ 0000				 main proc  far
+ 0000  B8 ---- R		    mov ax, data 
+ 0003  8E D8			    mov ds,ax   
+				        
+ 0005  8D 06 0000 R		 	lea ax, ary1                ; 入口参数，数组1首址         
+ 0009  B8 0000 R		 	mov  ax, offset ary1
+ 000C  50			    push ax
+ 000D  B8 000A			    mov  ax, cont1              ; 入口参数，数组1长度                      
+ 0010  50			    push ax
+ 0011  E8 0013			    call sum         	        ; 调用求和子程序
+					
+ 0014  8D 36 000C R			lea si, ary2                ; 入口参数，数组2首址  		
+ 0018  B8 000C R			mov  ax,offset ary2         ;
+ 001B  50				push ax
+
+ 001C  B8 000A			    mov  ax, cont2              ; 入口参数，数组2长度 
+ 001F  50				push ax
+ 0020  E8 0004				call sum 		            ; 调用求和子程序 
+					
+ 0023  B4 4C				mov ah, 4ch 		        ;	
+ 0025  CD 21				int 21h			            ; 主程序结束    
+ 0027					main endp
+					
+				;过程名称：sum
+				;功能：实现对数组元素求和  
+				;所用的寄存器：ax,bx,cx,bp,sp
+				;入口参数: 存于堆栈中，前两字节为数组首地址；后两字节为数组长度
+				;出口参数：无
+				;调用其他子程序：无  
+						
+ 0027				    sum proc           	  	       ;定义过程 sum
+ 0027  53					push bx
+ 0028  51					push cx
+ 0029  55					push bp
+ 002A  9C					pushf
+ 002B  8B EC					mov bp,sp
+						
+ 002D  8B 4E 0A					mov cx,[bp+10]             ;
+ 0030  8B 5E 0C					mov bx,[bp+12]	           ;
+						
+ 0033  33 C0					xor ax, ax    		       ;ax清0，存放和
+ 0035  02 07			  next: add al, [bx]		       ;数组元素相加
+ 0037  80 D4 00					adc ah, 0      		       ;高位放在ah中
+ 003A  43					inc bx 
+ 003B  E2 F8			 		loop next 
+ 003D  89 07					mov [bx], ax 		       ; 
+						
+ 003F  9D					popf
+ 0040  5D					pop bp
+ 0041  59					pop cx
+ 0042  5B					pop bx      
+						   
+ 0043  C3					ret		
+ 0044					sum	endp 			           ; 过程结束     
+				    
+ 0044				code	ends 			           ; 代码段结束 
+				end   main
+
+
+Microsoft (R) Macro Assembler Version 6.11		    11/08/19 17:40:41
+tempfile.asm						     Symbols 2 - 1
+
+
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+code . . . . . . . . . . . . . .	16 Bit	 0044	  Para	  Private 'CODE'	
+data . . . . . . . . . . . . . .	16 Bit	 0018	  Para	  Private 'DATA'	
+stack  . . . . . . . . . . . . .	16 Bit	 0100	  Para	  Stack	  'STACK'	 
+
+
+Procedures,  parameters and locals:
+
+                N a m e                 Type     Value    Attr
+
+main . . . . . . . . . . . . . .	P Far	 0000	  code	Length= 0027 Public
+sum  . . . . . . . . . . . . . .	P Near	 0027	  code	Length= 001D Public
+  next . . . . . . . . . . . . .	L Near	 0035	  code	
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+ary1 . . . . . . . . . . . . . .	Byte	 0000	  data	
+ary2 . . . . . . . . . . . . . .	Byte	 000C	  data	
+cont1  . . . . . . . . . . . . .	Number	 000Ah	 
+cont2  . . . . . . . . . . . . .	Number	 000Ah	 
+sum1 . . . . . . . . . . . . . .	Word	 000A	  data	
+sum2 . . . . . . . . . . . . . .	Word	 0016	  data	
+
+	   0 Warnings
+	   0 Errors

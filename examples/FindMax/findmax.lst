@@ -1,0 +1,83 @@
+Microsoft (R) Macro Assembler Version 6.11		    11/09/19 15:31:48
+tempfile.asm						     Page 1 - 1
+
+
+				;例 在内存中有一个数据块，其首地址为buffer (3000H:0200H)，
+				;其中存放16位的符号数20个。现要找出其中的最大值，
+				;并将其存入MAX字单元(其偏移地址为0228H)。
+
+ 0000				DATAS SEGMENT
+					org 0200h
+ 0200 0000 0001 FFFB 000A	    buffer dw  0, 1, -5, 10, 256, -128, -100, 45, 6
+       0100 FF80 FF9C
+       002D 0006
+ 0212  0003 FFF1 FFBD		           dw  3, -15, -67, 39, 4, 20, -1668,-32766
+       0027 0004 0014
+       F97C 8002
+ 0222  7FFD FDF3 012C		           dw  32765, -525, 300
+ 0228 0014			    count  dw  20
+ 022A 0000			    max    dw  ?
+ 022C				DATAS ENDS
+
+ 0000				STACKS SEGMENT stack 'stack'
+ 0000  0014 [			    dw 20 dup(0)  ;留20字的个存放空间
+        0000
+       ]
+ 0028				STACKS ENDS
+
+ 0000				CODES SEGMENT
+				    ASSUME CS:CODES,DS:DATAS,SS:STACKS
+ 0000				START:
+ 0000  B8 ---- R		    MOV AX,datas
+ 0003  8E D8			    MOV DS,AX
+ 0005  8D 36 0200 R		    lea si,buffer
+ 0009  8B 0E 0228 R		    mov cx,count
+ 000D  49			    dec cx
+ 000E  8B 04			    mov ax,[si]
+ 0010				chk:
+ 0010  83 C6 02			    add si,2
+ 0013  39 04			    cmp [si],ax
+ 0015  7E 02			    JLE next         ;[si]mem的数小于等于AX则转移到next
+ 0017  8B 04			    mov ax,[si]      ;如果mem的值大于ax的则替换
+				    
+ 0019				next:
+ 0019  E2 F5			    loop chk         ;小了则比下一个，loop自带减1
+				    
+ 001B  A3 022A R		    mov max,ax   ;最后将最大的数存进max字单元
+				    
+ 001E  CD 20			    int 20h
+				    
+ 0020				CODES ENDS
+				    END START
+
+
+
+
+Microsoft (R) Macro Assembler Version 6.11		    11/09/19 15:31:48
+tempfile.asm						     Symbols 2 - 1
+
+
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+CODES  . . . . . . . . . . . . .	16 Bit	 0020	  Para	  Private 
+DATAS  . . . . . . . . . . . . .	16 Bit	 022C	  Para	  Private 
+STACKS . . . . . . . . . . . . .	16 Bit	 0028	  Para	  Stack	  'STACK'	 
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+START  . . . . . . . . . . . . .	L Near	 0000	  CODES	
+buffer . . . . . . . . . . . . .	Word	 0200	  DATAS	
+chk  . . . . . . . . . . . . . .	L Near	 0010	  CODES	
+count  . . . . . . . . . . . . .	Word	 0228	  DATAS	
+max  . . . . . . . . . . . . . .	Word	 022A	  DATAS	
+next . . . . . . . . . . . . . .	L Near	 0019	  CODES	
+
+	   0 Warnings
+	   0 Errors
