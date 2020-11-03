@@ -1,0 +1,69 @@
+Microsoft (R) Macro Assembler Version 6.11		    11/10/19 00:59:18
+tempfile.asm						     Page 1 - 1
+
+
+ 0000				DATA SEGMENT
+ 0000  0014 [			    welc db 20 dup(32),1,'WELCOME YOU!',7,13,10
+        20
+       ] 01 57 45 4C 43
+       4F 4D 45 20 59 4F
+       55 21 07 0D 0A
+ 0024 = 0024			    cnt equ $-welc 
+ 0024				DATA ENDS
+
+ 0000				STACK SEGMENT stack 'stack'
+ 0000  0100 [			    stap db 256 dup(?)
+        00
+       ]
+ 0100 = 0100			    topp equ this near
+ 0100				STACK ENDS
+
+ 0000				CODE SEGMENT
+				    ASSUME CS:CODE,DS:DATA,SS:STACK
+ 0000				START:
+ 0000  B8 ---- R		    MOV AX,DATA
+ 0003  8E D8			    MOV DS,AX
+ 0005  B8 ---- R		    mov ax,stack
+ 0008  8E D0			    mov ss,ax
+ 000A  BC 0100 R		    mov sp,offset topp
+ 000D  BE 0000 R		    mov si,offset welc
+ 0010  B9 0024			    mov cx,cnt
+ 0013  8A 14			    next:mov dl,[si]
+ 0015  B4 02			    mov ah,2
+ 0017  CD 21			    int 21h
+ 0019  46			    inc si
+ 001A  E2 F7			    loop next
+ 001C  B4 4C			    MOV AH,4CH
+ 001E  CD 21			    INT 21H
+ 0020				CODE ENDS
+				    END START
+
+
+Microsoft (R) Macro Assembler Version 6.11		    11/10/19 00:59:18
+tempfile.asm						     Symbols 2 - 1
+
+
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+CODE . . . . . . . . . . . . . .	16 Bit	 0020	  Para	  Private 
+DATA . . . . . . . . . . . . . .	16 Bit	 0024	  Para	  Private 
+STACK  . . . . . . . . . . . . .	16 Bit	 0100	  Para	  Stack	  'STACK'	 
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+START  . . . . . . . . . . . . .	L Near	 0000	  CODE	
+cnt  . . . . . . . . . . . . . .	Number	 0024h	 
+next . . . . . . . . . . . . . .	L Near	 0013	  CODE	
+stap . . . . . . . . . . . . . .	Byte	 0000	  STACK	
+topp . . . . . . . . . . . . . .	Number	 0100h	 
+welc . . . . . . . . . . . . . .	Byte	 0000	  DATA	
+
+	   0 Warnings
+	   0 Errors
