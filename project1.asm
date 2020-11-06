@@ -1,3 +1,4 @@
+include showImg.asm
 DATA SEGMENT
     EQUAL_STR DB "===================================",0DH,0AH,'$'
     MENU_TIP DB "Press an alphabet to select a function0A0D$"
@@ -8,7 +9,17 @@ DATA SEGMENT
     TIME DB 2 DUP(0),':',2 DUP(0),':',2 DUP(0)," ",'$';,0DH,0AH,'$'
     LINE_BREAK DB 0AH,0DH,'$'
     authorInfo DB "(C) COPYRIGHT SimonKenneth 2020",'$'
-    BUFFER DB 100 DUP(0)
+    BUFFER DB 100 DUP(0) ;通用缓冲区
+    ;--------------------读取图片所需变量--------------------
+;     bmpfname db '1.bmp', 0      ; 图片路径  
+;     x0 dw 0  	                ; 当前显示界面的横坐标，初始为0
+;     y0 dw 0            	        ; 当前显示界面的纵坐标，初始为0
+;     handle dw ?                 ; 文件指针  
+;     bmpdata1 db 256*4 dup(?)    ; 存放位图文件调色板  
+;     bmpdata2 db 64000 dup(0)    ; 存放位图信息,64k  
+;     bmpwidth dw ?               ; 位图宽度  
+;     bmplength dw ?              ; 位图长度 
+    
 DATA ENDS
 
 STACK SEGMENT STACK 'STACK'
@@ -25,6 +36,12 @@ START:
 
 ;==============================主过程==============================
 BEGIN:       
+        ;显示图片
+        call openf   
+        call readf  
+        call proc1 
+        call proc2 
+
         MOV AX,0600H	;清屏
 	MOV BH,07H
 	MOV CX,0
