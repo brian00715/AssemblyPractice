@@ -3,9 +3,10 @@ DATA SEGMENT
     MENU_TIP DB "Press an alphabet to select a function",0DH,0AH,'$'
     TIPS1 DB "T:Show Time",0AH,0DH,'$'
     TIPS2 DB "D:Show Date",0AH,0DH,'$'
-    TIPS3 DB "Where to show?",0AH,0DH,'$'
     TIPS4 DB "Q:Quit This Program",0AH,0DH,'$'
     TIPS5 DB "Enter X,Y:",0AH,0DH,'$'
+    TIPSX DB 30 
+    TIPSY DB 0
     LINE_BREAK DB 0AH,0DH,'$'
     authorInfo DB "(C) COPYRIGHT SimonKenneth 2020",'$'
     BUFFER DB 100 DUP(0) ;通用缓冲区
@@ -13,6 +14,8 @@ DATA SEGMENT
     DATE DB "DATE:",4 DUP(0),"/",2 DUP(0),"/",2 DUP(0)," ",3 DUP(0)," ",'$';,0DH,0AH,'$'
     WEEK DB "MON","TUS","WED","THS","FRI","SAT","SUN" ;星期预定义
     TIME DB 2 DUP('0'),':',2 DUP('0'),':',2 DUP('0')," ",'$';,0DH,0AH,'$'
+    X DB 20
+    Y DB 20
     ;--------------------显示图片所需变量--------------------
     bmpfname db '1.bmp', 0      ; 图片路径  
     x0 dw 0  	                ; 当前显示界面的横坐标，初始为0
@@ -38,79 +41,73 @@ STACK ENDS
 
 CODE SEGMENT 'CODE'
     ASSUME DS:DATA,SS:STACK,CS:CODE
+;=====================宏定义=======================
+SET_SHOW_POS MACRO _X,_Y
+        MOV BH,0       ;页码
+        mov DH,_X       ;行
+        mov DL,_Y       ;列
+        mov ah,02H      
+        int 10h
+        ENDM
 START:
         ;设定段寄存器
         MOV AX,DATA
         MOV DS,AX
         MOV ES,AX
 
-;>>>>>>>>>>>>>>>>>>>>>>>>>>>>主过程<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-BEGIN:       
+;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>主过程<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+BEGIN:     
+        CALL CLR_SRC
+        ;设置光标位置
+        SET_SHOW_POS 0 0
         ;显示图片
         CALL OPEN_PHOTO   
         CALL READ_PHOTO
         CALL SET_COLOR 
         CALL SHOW_IMG 
-        ;显示提示信息
-        LEA DX,EQUAL_STR
-        MOV AH,09H
-        INT 21H
-        LEA DX,MENU_TIP
-        MOV AH,09H
-        INT 21H
-        LEA DX,TIPS1
-        MOV AH,09H
-        INT 21H
-        LEA DX,TIPS2
-        MOV AH,09H
-        INT 21H
-        LEA DX,EQUAL_STR
-        MOV AH,09H
-        INT 21H
+
+        MOV AH,0EH
+        MOV AL,'A'
+        MOV BH,0
+        MOV BL,21H
+        INT 10H
+        CALL SHOW_TIPS
+        XOR CX,CX
 MAIN_LOOP:              ;主循环
-        MOV AH,0        ;等待键盘输入
+        MOV AH,00H      ;等待键盘输入
         INT 16H
-        CMP AL,'D'
-        JE PRESS_D
-        CMP AL,'T'
+        CMP AL,'t'
         JE PRESS_T
-        CMP AL,'Q'
+        CMP AL,'d'
+        JE PRESS_D
+        CMP AL,'q'
         JE PRESS_Q
+        CMP AX,4b00h
+        JE MOVEL
+        CMP AX,4D00H
+        JE MOVER
+        JMP MAIN_LOOP
+MOVEL:  
+        MOV AL,Y
+        SUB AL,5
+        MOV Y,AL
+        JMP MAIN_LOOP
+MOVER:
+        MOV AL,Y
+        ADD AL,5
+        MOV Y,AL
+        JMP MAIN_LOOP
 PRESS_D:
-        LEA DX,TIPS3
-        MOV AH,09H
-        INT 21H
         CALL GET_DATE
         CALL SHOW_DATE
         JMP MAIN_LOOP
 PRESS_T:
-        LEA DX,TIPS3
-        MOV AH,09H
-        INT 21H
-        mov dh,10       ;第10行
-        mov dl,20       ;第20列
-        mov ah,2        ;设置光标位置
-        int 10h
         CALL GET_TIME
         CALL SHOW_TIME
         JMP MAIN_LOOP
-PRESS_Q:JMP EXIT_MAIN
+PRESS_Q:
+        JMP EXIT_MAIN
         
-        ;清屏
-        ; MOV AX,0600H	
-	; MOV BH,07H
-	; MOV CX,0
-	; MOV DX,204FH
-	; INT 10H
-
-        CALL GET_DATE
-        CALL SHOW_DATE
-        CALL GET_TIME
-        CALL SHOW_TIME
-
-        LEA DX,EQUAL_STR
-        MOV AH,09H
-        INT 21H
 EXIT_MAIN:
         MOV AH,0 ; 等待键盘输入后退出
         INT 16H
@@ -118,6 +115,50 @@ EXIT_MAIN:
         INT 21H
 
 ;========================子过程定义=========================
+; -----------CLR_SRC-----------
+; 子程序名：CLR_SRC
+; 功能：清屏
+CLR_SRC PROC
+        PUSH AX
+        PUSH BX
+        PUSH CX
+        PUSH DX
+        MOV AX,0600H	
+	MOV BH,07H
+	MOV CX,0
+	MOV DX,204FH
+	INT 10H
+        POP DX
+        POP CX
+        POP BX
+        POP AX
+        RET
+CLR_SRC ENDP
+
+; -----------SHOW_TIPS-----------
+; 子程序名：SHOW_TIPS
+; 功能：显示提示信息
+SHOW_TIPS PROC        
+        PUSH AX
+        PUSH DX
+        SET_SHOW_POS TIPSX TIPSY ;设置显示位置
+        LEA DX,EQUAL_STR
+        MOV AH,09H
+        INT 21H
+        LEA DX,MENU_TIP
+        INT 21H
+        LEA DX,TIPS1
+        INT 21H
+        LEA DX,TIPS2
+        INT 21H
+        LEA DX,TIPS4
+        INT 21H
+        LEA DX,EQUAL_STR
+        INT 21H
+        POP DX
+        POP AX
+        RET
+SHOW_TIPS ENDP
 ; -----------GET_TIME-----------
 ; 子程序名：GET_TIME
 ; 功能：获取时间，并填充TIME数组
@@ -127,6 +168,7 @@ EXIT_MAIN:
 GET_TIME PROC
         PUSH AX
         PUSH BX
+        PUSH DX
         MOV AH,2CH      ;获取系统时间
         INT 21H
         XOR AX,AX   
@@ -135,7 +177,7 @@ GET_TIME PROC
         MOV AL,CH
         LEA BX,TIME+1
         CALL NUM2ASC
-        ADD BX,4
+        ADD BX,5
         ;转换分
         MOV AL,CL
         CALL NUM2ASC
@@ -143,6 +185,7 @@ GET_TIME PROC
         ;转换秒
         MOV AL,DH
         CALL NUM2ASC
+        POP DX
         POP BX
         POP AX
         RET
@@ -174,6 +217,13 @@ CLR_TIME ENDP
 SHOW_TIME PROC
         PUSH DX 
         PUSH AX
+        ;设置显示位置
+        MOV BH,0       ;页码
+        mov DH,X       ;行
+        mov DL,Y       ;列
+        mov ah,02H      
+        int 10h
+
         MOV AH,01H
         MOV CX,0001H
         INT 10H
@@ -183,7 +233,6 @@ SHOW_TIME PROC
         CALL PRINT_LINE_BREAK
         POP AX
         POP DX
-        RET
 SHOW_TIME ENDP
 
 ; -----------GET_DATE-----------
