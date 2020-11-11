@@ -13,9 +13,11 @@ DATA SEGMENT
     ;--------------------显示日期时间所需变量--------------------
     DATE DB "DATE:",4 DUP(0),"/",2 DUP(0),"/",2 DUP(0)," ",3 DUP(0)," ",'$';,0DH,0AH,'$'
     WEEK DB "MON","TUS","WED","THS","FRI","SAT","SUN" ;星期预定义
-    TIME DB 2 DUP('0'),':',2 DUP('0'),':',2 DUP('0')," ",'$';,0DH,0AH,'$'
-    X DB 20
-    Y DB 20
+    TIME DB 2 DUP('0'),':',2 DUP('0'),':',2 DUP('0'),'$';,0DH,0AH,'$'
+    DATE_X DB 20
+    DATE_Y DB 20
+    TIME_X DB 0
+    TIME_Y DB 0
     ;--------------------显示图片所需变量--------------------
     bmpfname db '1.bmp', 0      ; 图片路径  
     x0 dw 0  	                ; 当前显示界面的横坐标，初始为0
@@ -27,12 +29,14 @@ DATA SEGMENT
     bmplength dw ?              ; 位图长度 
     ;--------------------8253中断定时器所需变量--------------------
     count100 DB 100             ; 分频系数
-    tenHour db 0                ; 小时的十位
-    hour db 0,':'
-    tenMin db 0
-    minute db 0,':'
-    tenSec db 0
-    second db 0
+    tenHour db '0'                ; 小时的十位
+    hour db '0',':'
+    tenMin db '0'
+    minute db '0',':'
+    tenSec db '0'
+    second db '0'
+    timer_x db 10
+    timer_y db 10
 DATA ENDS
 
 STACK SEGMENT STACK 'STACK'
@@ -42,13 +46,20 @@ STACK ENDS
 CODE SEGMENT 'CODE'
     ASSUME DS:DATA,SS:STACK,CS:CODE
 ;=====================宏定义=======================
-SET_SHOW_POS MACRO _X,_Y
+SET_SHOW_POS MACRO POS_X,POS_Y
         MOV BH,0       ;页码
-        mov DH,_X       ;行
-        mov DL,_Y       ;列
+        mov DH,POS_X   ;行
+        mov DL,POS_Y   ;列
         mov ah,02H      
         int 10h
         ENDM
+SHOW_STR MACRO STRING_NAME,STR_X,STR_Y
+        SET_SHOW_POS STR_X,STR_Y
+        LEA DX,STRING_NAME
+        MOV AH,09H
+        INT 21h
+        ENDM
+;=====================宏定义END=======================
 START:
         ;设定段寄存器
         MOV AX,DATA
@@ -59,21 +70,19 @@ START:
 BEGIN:     
         CALL CLR_SRC
         ;设置光标位置
-        SET_SHOW_POS 0 0
-        ;显示图片
-        CALL OPEN_PHOTO   
+        SET_SHOW_POS 0,0
+        
+        CALL OPEN_PHOTO ;从硬盘读取图片 
         CALL READ_PHOTO
         CALL SET_COLOR 
-        CALL SHOW_IMG 
-
-        MOV AH,0EH
-        MOV AL,'A'
-        MOV BH,0
-        MOV BL,21H
-        INT 10H
-        CALL SHOW_TIPS
+        CALL SHOW_IMG   ;显示图片
+        CALL SHOW_TIPS  ;显示提示信息
+        CALL TIMER_INIT ;定时器初始化
+        CALL TIMER_NABLE;定时器使能
         XOR CX,CX
+
 MAIN_LOOP:              ;主循环
+        CALL GET_TIME   ;时刻更新时间
         MOV AH,00H      ;等待键盘输入
         INT 16H
         CMP AL,'t'
@@ -88,29 +97,31 @@ MAIN_LOOP:              ;主循环
         JE MOVER
         JMP MAIN_LOOP
 MOVEL:  
-        MOV AL,Y
+        MOV AL,TIME_Y
         SUB AL,5
-        MOV Y,AL
+        MOV TIME_Y,AL
         JMP MAIN_LOOP
 MOVER:
-        MOV AL,Y
+        MOV AL,TIME_Y
         ADD AL,5
-        MOV Y,AL
+        MOV TIME_Y,AL
         JMP MAIN_LOOP
 PRESS_D:
         CALL GET_DATE
         CALL SHOW_DATE
         JMP MAIN_LOOP
 PRESS_T:
-        CALL GET_TIME
+        CALL SHOW_IMG
         CALL SHOW_TIME
         JMP MAIN_LOOP
 PRESS_Q:
         JMP EXIT_MAIN
         
 EXIT_MAIN:
-        MOV AH,0 ; 等待键盘输入后退出
+        MOV AH,0        ;等待键盘输入后退出
         INT 16H
+        mov ax, 3  	;返回80x25x16窗口
+        int 10h
         MOV AH,4CH
         INT 21H
 
@@ -141,31 +152,24 @@ CLR_SRC ENDP
 SHOW_TIPS PROC        
         PUSH AX
         PUSH DX
-        SET_SHOW_POS TIPSX TIPSY ;设置显示位置
-        LEA DX,EQUAL_STR
-        MOV AH,09H
-        INT 21H
-        LEA DX,MENU_TIP
-        INT 21H
-        LEA DX,TIPS1
-        INT 21H
-        LEA DX,TIPS2
-        INT 21H
-        LEA DX,TIPS4
-        INT 21H
-        LEA DX,EQUAL_STR
-        INT 21H
+        SHOW_STR EQUAL_STR,0,0
+        SHOW_STR MENU_TIP,1,0
+        SHOW_STR TIPS1,2,0
+        SHOW_STR TIPS2,3,0
+        SHOW_STR TIPS4,4,0
+        SHOW_STR EQUAL_STR,5,0
         POP DX
         POP AX
         RET
 SHOW_TIPS ENDP
+
 ; -----------GET_TIME-----------
 ; 子程序名：GET_TIME
 ; 功能：获取时间，并填充TIME数组
 ; 所用寄存器：ch,cl,dh中分别存放时分秒
 ; 入口参数：无
 ; 出口参数：无
-GET_TIME PROC
+GET_TIME PROC FAR
         PUSH AX
         PUSH BX
         PUSH DX
@@ -194,7 +198,7 @@ GET_TIME ENDP
 ; -----------CLR_TIME-----------
 ; 子程序名：CLR_TIME
 ; 功能：清空TIME数组
-CLR_TIME PROC
+CLR_TIME PROC FAR
         PUSH BX
         MOV BX,OFFSET TIME
         MOV BYTE PTR[BX],'0'
@@ -212,25 +216,14 @@ CLR_TIME ENDP
 ; 子程序名：SHOW_TIME
 ; 功能：显示日期
 ; 所用寄存器：
-; 入口参数：AL,AH分别存X和Y坐标
+; 入口参数：
 ; 出口参数：无
 SHOW_TIME PROC
         PUSH DX 
         PUSH AX
-        ;设置显示位置
-        MOV BH,0       ;页码
-        mov DH,X       ;行
-        mov DL,Y       ;列
-        mov ah,02H      
-        int 10h
-
-        MOV AH,01H
-        MOV CX,0001H
-        INT 10H
-        LEA DX,TIME
-        MOV AH,09H
-        INT 21H
-        CALL PRINT_LINE_BREAK
+        SET_SHOW_POS TIME_X, TIME_Y     ;设置显示位置
+        SHOW_STR TIME
+        ; CALL PRINT_LINE_BREAK
         POP AX
         POP DX
 SHOW_TIME ENDP
@@ -292,15 +285,16 @@ STORE:  MOV AL,[SI]
         RET
 GET_DATE ENDP
 
-; -----------SHOW_DATE-----------<TODO>
+; -----------SHOW_DATE-----------
 ; 子程序名：SHOW_DATE
 ; 功能：显示日期
 ; 所用寄存器：DX,AH
-; 入口参数：AL,AH分别存X和Y坐标
+; 入口参数：
 ; 出口参数：无
 SHOW_DATE PROC
         PUSH DX
         PUSH AX
+        SET_SHOW_POS DATE_X,DATE_Y
         LEA DX,DATE
         MOV AH,09H  
         INT 21H
@@ -584,13 +578,22 @@ TIMER_NABLE ENDP
 
 ; -----------TIMER-----------
 ; 子程序名：TIMER
-; 功能: 定时器子程序主体
+; 功能: 定时器中断服务程序
 TIMER PROC FAR
         PUSH AX
+        CALL GET_TIME           ;更新时间
         DEC count100
         JNZ TIMERX
-        MOV count100,100        ;计数清零后重置计数器
-        INC second      ;每计100次是1秒
+
+        MOV count100,100        ;计数溢出后重置计数器
+        ADD TIME_X,1
+        ADD TIME_Y,1
+        CALL SHOW_IMG
+        CALL SHOW_TIME
+        ; SET_SHOW_POS timer_x,timer_y
+        ; CALL DISP_CLK
+
+        INC second              ;每计100次是1秒
         CMP second,'9'
         JLE TIMERX
         MOV second,'0'
@@ -626,12 +629,37 @@ TIMERX:
         IRET            ;中断返回
 TIMER ENDP
 
-; -----------DISPCLK-----------
-; 子程序名：DISPCLK
-; 功能: 显示时间
-DISPCLK PROC
+; -----------DISP_CLK-----------
+; 子程序名：DISP_CLK
+; 功能: 显示定时器时间
+DISP_CLK PROC
+        PUSH BX
+        PUSH AX
+        MOV BX,OFFSET tenHour
+        MOV CX,8
+DISP_LOOP:
+        MOV AL,[BX]     ;AL存待显示字符
+        CALL DISP_CHAR
+        INC BX
+        LOOP DISP_LOOP
+        POP AX
+        POP BX
+        RET 
+DISP_CLK ENDP
 
-DISPCLK ENDP
+; -----------DISP_CHAR-----------
+; 子程序名：DISP_CHAR
+; 功能: 显示一个字符
+; 入口参数：AL存放待显示字符
+DISP_CHAR PROC
+        PUSH BX
+        MOV BX,0
+        MOV AH,14
+        INT 10h
+        POP BX
+        RET
+DISP_CHAR ENDP
+
 ;====================子过程定义END============================
 CODE ENDS
     END START
