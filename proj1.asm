@@ -11,9 +11,9 @@ DATA SEGMENT
     authorInfo DB "(C) COPYRIGHT SimonKenneth 2020",'$'
     BUFFER DB 100 DUP(0) ;通用缓冲区
     ;--------------------显示日期时间所需变量--------------------
-    DATE DB "DATE:",4 DUP(0),"/",2 DUP(0),"/",2 DUP(0)," ",3 DUP(0)," ",'$';,0DH,0AH,'$'
+    DATE DB "DATE:",4 DUP(0),"/",2 DUP(0),"/",2 DUP(0)," ",3 DUP(0),'$','$'
     WEEK DB "MON","TUS","WED","THS","FRI","SAT","SUN" ;星期预定义
-    TIME DB 2 DUP('0'),':',2 DUP('0'),':',2 DUP('0'),'$';,0DH,0AH,'$'
+    TIME DB 2 DUP('0'),':',2 DUP('0'),':',2 DUP('0'),'$','$'
     DATE_X DB 20
     DATE_Y DB 20
     TIME_X DB 0
@@ -35,6 +35,7 @@ DATA SEGMENT
     minute db '0',':'
     tenSec db '0'
     second db '0'
+    timerCount db "00:00:00:000",'$','$'
     timer_x db 10
     timer_y db 10
 DATA ENDS
@@ -64,26 +65,20 @@ START:
         ;设定段寄存器
         MOV AX,DATA
         MOV DS,AX
-        MOV ES,AX
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>主过程<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 BEGIN:     
         CALL CLR_SRC
-        ;设置光标位置
-        SET_SHOW_POS 0,0
-        
-        CALL OPEN_PHOTO ;从硬盘读取图片 
-        CALL READ_PHOTO
-        CALL SET_COLOR 
-        CALL SHOW_IMG   ;显示图片
-        CALL SHOW_TIPS  ;显示提示信息
-        CALL TIMER_INIT ;定时器初始化
-        CALL TIMER_NABLE;定时器使能
+        ; CALL OPEN_PHOTO   ;从硬盘读取图片 
+        ; CALL READ_PHOTO
+        ; CALL SET_COLOR 
+        ; CALL SHOW_IMG     ;显示图片
+        CALL SHOW_TIPS    ;显示提示信息
         XOR CX,CX
 
-MAIN_LOOP:              ;主循环
-        CALL GET_TIME   ;时刻更新时间
-        MOV AH,00H      ;等待键盘输入
+MAIN_LOOP:                ;主循环
+        
+        MOV AH,01H      ;键盘输入
         INT 16H
         CMP AL,'t'
         JE PRESS_T
@@ -95,6 +90,8 @@ MAIN_LOOP:              ;主循环
         JE MOVEL
         CMP AX,4D00H
         JE MOVER
+        CMP AL,'c'
+        JE PRESS_C
         JMP MAIN_LOOP
 MOVEL:  
         MOV AL,TIME_Y
@@ -111,8 +108,13 @@ PRESS_D:
         CALL SHOW_DATE
         JMP MAIN_LOOP
 PRESS_T:
-        CALL SHOW_IMG
+        ; CALL SHOW_IMG
+        CALL GET_TIME     ;更新时间
         CALL SHOW_TIME
+        JMP MAIN_LOOP
+PRESS_C:
+        ; CALL TIMER_INIT ;定时器初始化
+        ; CALL TIMER_NABLE  ;定时器使能
         JMP MAIN_LOOP
 PRESS_Q:
         JMP EXIT_MAIN
@@ -169,7 +171,7 @@ SHOW_TIPS ENDP
 ; 所用寄存器：ch,cl,dh中分别存放时分秒
 ; 入口参数：无
 ; 出口参数：无
-GET_TIME PROC FAR
+GET_TIME PROC
         PUSH AX
         PUSH BX
         PUSH DX
@@ -181,7 +183,7 @@ GET_TIME PROC FAR
         MOV AL,CH
         LEA BX,TIME+1
         CALL NUM2ASC
-        ADD BX,5
+        ADD BX,4
         ;转换分
         MOV AL,CL
         CALL NUM2ASC
@@ -221,8 +223,7 @@ CLR_TIME ENDP
 SHOW_TIME PROC
         PUSH DX 
         PUSH AX
-        SET_SHOW_POS TIME_X, TIME_Y     ;设置显示位置
-        SHOW_STR TIME
+        SHOW_STR TIME,TIME_X,TIME_Y
         ; CALL PRINT_LINE_BREAK
         POP AX
         POP DX
@@ -543,11 +544,11 @@ SHOW_IMG endp
 TIMER_INIT PROC
         PUSH BX
         PUSH AX
-        ;将timer中断程序放入终端地址表08h的位置中
+        ;将timer中断程序放入中断地址表08h的位置中
         CLI 
         MOV AX,0
         MOV ES,AX
-        MOV DI,20H
+        MOV DI,20H      ;8*4=32=20h
         MOV AX,OFFSET TIMER
         STOSW
         MOV AX,CS
@@ -568,7 +569,7 @@ TIMER_INIT ENDP
 
 ; -----------TIMER_NABLE-----------
 ; 子程序名：TIMER_NABLE
-; 功能: 使能定时中断和按键中断
+; 功能: 使能定时中断
 TIMER_NABLE PROC
         MOV AL,0FCH
         OUT 21H,AL      ;写中断掩码寄存器
@@ -581,43 +582,38 @@ TIMER_NABLE ENDP
 ; 功能: 定时器中断服务程序
 TIMER PROC FAR
         PUSH AX
-        CALL GET_TIME           ;更新时间
         DEC count100
         JNZ TIMERX
+        MOV count100,100        ;1秒，计数溢出后重置计数器
 
-        MOV count100,100        ;计数溢出后重置计数器
         ADD TIME_X,1
         ADD TIME_Y,1
-        CALL SHOW_IMG
-        CALL SHOW_TIME
-        ; SET_SHOW_POS timer_x,timer_y
-        ; CALL DISP_CLK
 
-        INC second              ;每计100次是1秒
-        CMP second,'9'
-        JLE TIMERX
-        MOV second,'0'
-        INC tenSec
-        CMP tenSec,'6'
-        JL TIMERX
-        MOV tenSec,'0'
-        INC minute
-        CMP minute,'9'
-        JLE TIMERX
-        MOV minute,'0'
-        INC tenMin
-        CMP tenMin,'6'
-        JL TIMERX
-        MOV tenMin,'0'
-        INC hour
-        CMP hour,'9'
-        JA ADDHOUR
-        CMP HOUR,'3'
-        JNZ TIMERX
-        CMP tenHour,'1'
-        JNZ TIMERX
-        MOV hour,'1'
-        MOV tenHour,'0'
+        ; INC second
+        ; CMP second,'9'
+        ; JLE TIMERX
+        ; MOV second,'0'
+        ; INC tenSec
+        ; CMP tenSec,'6'
+        ; JL TIMERX
+        ; MOV tenSec,'0'
+        ; INC minute
+        ; CMP minute,'9'
+        ; JLE TIMERX
+        ; MOV minute,'0'
+        ; INC tenMin
+        ; CMP tenMin,'6'
+        ; JL TIMERX
+        ; MOV tenMin,'0'
+        ; INC hour
+        ; CMP hour,'9'
+        ; JA ADDHOUR
+        ; CMP HOUR,'3'
+        ; JNZ TIMERX
+        ; CMP tenHour,'1'
+        ; JNZ TIMERX
+        ; MOV hour,'1'
+        ; MOV tenHour,'0'
         JMP SHORT TIMERX
 ADDHOUR:
         INC tenHour
