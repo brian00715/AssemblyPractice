@@ -1,5 +1,5 @@
 DATA SEGMENT
-    EQUAL_STR DB "===================================",0DH,0AH,'$'
+    EQUAL_STR DB "=========================================",0DH,0AH,'$'
     MENU_TIP DB "Press an alphabet to select a function",0DH,0AH,'$'
     TIPS1 DB "T:Show Time",0AH,0DH,'$'
     TIPS2 DB "D:Show Date",0AH,0DH,'$'
@@ -13,7 +13,7 @@ DATA SEGMENT
     ;--------------------显示日期时间所需变量--------------------
     DATE DB "DATE:",4 DUP(0),"/",2 DUP(0),"/",2 DUP(0)," ",3 DUP(0),'$','$'
     WEEK DB "MON","TUS","WED","THS","FRI","SAT","SUN" ;星期预定义
-    TIME DB 2 DUP('0'),':',2 DUP('0'),':',2 DUP('0'),'$','$'
+    TIME DB "00:00:00",'$','$'
     DATE_X DB 20
     DATE_Y DB 20
     TIME_X DB 0
@@ -73,13 +73,12 @@ BEGIN:
         ; CALL READ_PHOTO
         ; CALL SET_COLOR 
         ; CALL SHOW_IMG     ;显示图片
-        CALL SHOW_TIPS    ;显示提示信息
-        XOR CX,CX
-
-MAIN_LOOP:                ;主循环
-        
-        MOV AH,01H      ;键盘输入
-        INT 16H
+        CALL SHOW_TIPS  ;显示提示信息
+MAIN_LOOP:              ;主循环
+        CALL GET_TIME
+        CALL SHOW_TIME
+        MOV AH,07H      ;键盘输入
+        INT 21H
         CMP AL,'t'
         JE PRESS_T
         CMP AL,'d'
@@ -109,12 +108,12 @@ PRESS_D:
         JMP MAIN_LOOP
 PRESS_T:
         ; CALL SHOW_IMG
-        CALL GET_TIME     ;更新时间
+        CALL GET_TIME   ;更新时间
         CALL SHOW_TIME
         JMP MAIN_LOOP
 PRESS_C:
-        ; CALL TIMER_INIT ;定时器初始化
-        ; CALL TIMER_NABLE  ;定时器使能
+        CALL TIMER_INIT ;定时器初始化
+        CALL TIMER_NABLE  ;定时器使能
         JMP MAIN_LOOP
 PRESS_Q:
         JMP EXIT_MAIN
@@ -154,12 +153,12 @@ CLR_SRC ENDP
 SHOW_TIPS PROC        
         PUSH AX
         PUSH DX
-        SHOW_STR EQUAL_STR,0,0
-        SHOW_STR MENU_TIP,1,0
-        SHOW_STR TIPS1,2,0
-        SHOW_STR TIPS2,3,0
-        SHOW_STR TIPS4,4,0
-        SHOW_STR EQUAL_STR,5,0
+        SHOW_STR EQUAL_STR,0,10
+        SHOW_STR MENU_TIP,1,10
+        SHOW_STR TIPS1,2,10
+        SHOW_STR TIPS2,3,10
+        SHOW_STR TIPS4,4,10
+        SHOW_STR EQUAL_STR,5,10
         POP DX
         POP AX
         RET
@@ -183,11 +182,17 @@ GET_TIME PROC
         MOV AL,CH
         LEA BX,TIME+1
         CALL NUM2ASC
-        ADD BX,4
+        TEST CH,0F0H    ;判断小时是否有十位
+        JZ HOUR4        ;ZF=1则没有十位
+        ADD BX,5
+HOUR4:  ADD BX,4
         ;转换分
         MOV AL,CL
         CALL NUM2ASC
+        TEST CL,0F0H
+        JZ MIN4
         ADD BX,5
+MI4:    ADD BX,4
         ;转换秒
         MOV AL,DH
         CALL NUM2ASC
