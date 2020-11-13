@@ -35,9 +35,11 @@ DATA SEGMENT
     minute db '0',':'
     tenSec db '0'
     second db '0'
-    timerCount db "00:00:00:000",'$','$'
+    timerStr db "00:00:00:00",'$'
     timer_x db 10
     timer_y db 10
+    timer_tips db "The timer has been opened!",'$'
+    timerStart_Flag db 0
 DATA ENDS
 
 STACK SEGMENT STACK 'STACK'
@@ -69,16 +71,23 @@ START:
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>主过程<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 BEGIN:     
         CALL CLR_SRC
-        ; CALL OPEN_PHOTO   ;从硬盘读取图片 
+        ; CALL OPEN_PHOTO       ;从硬盘读取图片 
         ; CALL READ_PHOTO
         ; CALL SET_COLOR 
-        ; CALL SHOW_IMG     ;显示图片
-        CALL SHOW_TIPS  ;显示提示信息
-MAIN_LOOP:              ;主循环
+        ; CALL SHOW_IMG         ;显示图片
+        CALL SHOW_TIPS          ;显示提示信息
+MAIN_LOOP:                      ;主循环
         CALL GET_TIME
         CALL SHOW_TIME
-        MOV AH,07H      ;键盘输入
-        INT 21H
+        SHOW_STR timerStr,10,10
+        XOR AX,AX
+        MOV AH,01H              ;键盘输入
+        INT 16H     
+        JNZ SCAN_BUTTON
+        JMP MAIN_LOOP
+SCAN_BUTTON:
+        MOV AH,00H
+        INT 16H                 ;将缓冲区的字符读走，使缓冲区清空
         CMP AL,'t'
         JE PRESS_T
         CMP AL,'d'
@@ -108,20 +117,21 @@ PRESS_D:
         JMP MAIN_LOOP
 PRESS_T:
         ; CALL SHOW_IMG
-        CALL GET_TIME   ;更新时间
+        CALL GET_TIME            ;更新时间
         CALL SHOW_TIME
         JMP MAIN_LOOP
 PRESS_C:
-        CALL TIMER_INIT ;定时器初始化
-        CALL TIMER_NABLE  ;定时器使能
+        SHOW_STR timer_tips,20,0
+        CALL TIMER_INIT          ;定时器初始化
+        CALL TIMER_ENABLE        ;定时器使能
         JMP MAIN_LOOP
 PRESS_Q:
         JMP EXIT_MAIN
         
 EXIT_MAIN:
-        MOV AH,0        ;等待键盘输入后退出
+        MOV AH,0                ;等待键盘输入后退出
         INT 16H
-        mov ax, 3  	;返回80x25x16窗口
+        mov ax, 3  	        ;返回80x25x16窗口
         int 10h
         MOV AH,4CH
         INT 21H
@@ -177,25 +187,21 @@ GET_TIME PROC
         MOV AH,2CH      ;获取系统时间
         INT 21H
         XOR AX,AX   
-        CALL CLR_TIME    
+        CALL CLR_TIME 
+        ; 00:00:00   
         ;转换小时为ASC2
         MOV AL,CH
         LEA BX,TIME+1
         CALL NUM2ASC
-        TEST CH,0F0H    ;判断小时是否有十位
-        JZ HOUR4        ;ZF=1则没有十位
-        ADD BX,5
-HOUR4:  ADD BX,4
+        LEA BX,TIME+4
         ;转换分
         MOV AL,CL
         CALL NUM2ASC
-        TEST CL,0F0H
-        JZ MIN4
-        ADD BX,5
-MI4:    ADD BX,4
+        LEA BX,TIME+7
         ;转换秒
         MOV AL,DH
         CALL NUM2ASC
+        ADD BX,3
         POP DX
         POP BX
         POP AX
@@ -572,21 +578,32 @@ TIMER_INIT PROC
         RET
 TIMER_INIT ENDP
 
-; -----------TIMER_NABLE-----------
-; 子程序名：TIMER_NABLE
+; -----------TIMER_ENABLE-----------
+; 子程序名：TIMER_ENABLE
 ; 功能: 使能定时中断
-TIMER_NABLE PROC
+TIMER_ENABLE PROC
         MOV AL,0FCH
         OUT 21H,AL      ;写中断掩码寄存器
         STI             ;使能8086中断
         RET
-TIMER_NABLE ENDP
+TIMER_ENABLE ENDP
 
 ; -----------TIMER-----------
 ; 子程序名：TIMER
 ; 功能: 定时器中断服务程序
 TIMER PROC FAR
         PUSH AX
+        PUSH BX
+        ; 00:00:00
+        MOV AX,WORD PTR count100
+        ; MOV DX,10
+        ; DIV DL                  ;分离十位和个位，个位在AH，十位在AL
+        ; ADD AH,30H
+        ; ADD AL,30H
+        ; LEA BX,timerStr
+        ; MOV [BX+6],AL
+        ; MOV [BX+7],AH
+
         DEC count100
         JNZ TIMERX
         MOV count100,100        ;1秒，计数溢出后重置计数器
@@ -594,31 +611,31 @@ TIMER PROC FAR
         ADD TIME_X,1
         ADD TIME_Y,1
 
-        ; INC second
-        ; CMP second,'9'
-        ; JLE TIMERX
-        ; MOV second,'0'
-        ; INC tenSec
-        ; CMP tenSec,'6'
-        ; JL TIMERX
-        ; MOV tenSec,'0'
-        ; INC minute
-        ; CMP minute,'9'
-        ; JLE TIMERX
-        ; MOV minute,'0'
-        ; INC tenMin
-        ; CMP tenMin,'6'
-        ; JL TIMERX
-        ; MOV tenMin,'0'
-        ; INC hour
-        ; CMP hour,'9'
-        ; JA ADDHOUR
-        ; CMP HOUR,'3'
-        ; JNZ TIMERX
-        ; CMP tenHour,'1'
-        ; JNZ TIMERX
-        ; MOV hour,'1'
-        ; MOV tenHour,'0'
+        INC second
+        CMP second,'9'
+        JLE TIMERX
+        MOV second,'0'
+        INC tenSec
+        CMP tenSec,'6'
+        JL TIMERX
+        MOV tenSec,'0'
+        INC minute
+        CMP minute,'9'
+        JLE TIMERX
+        MOV minute,'0'
+        INC tenMin
+        CMP tenMin,'6'
+        JL TIMERX
+        MOV tenMin,'0'
+        INC hour
+        CMP hour,'9'
+        JA ADDHOUR
+        CMP HOUR,'3'
+        JNZ TIMERX
+        CMP tenHour,'1'
+        JNZ TIMERX
+        MOV hour,'1'
+        MOV tenHour,'0'
         JMP SHORT TIMERX
 ADDHOUR:
         INC tenHour
@@ -626,6 +643,21 @@ ADDHOUR:
 TIMERX:
         MOV AL,20H
         OUT 20H,AL
+        LEA BX,timerStr
+        MOV AL,tenHour
+        MOV BYTE PTR[BX],AL
+        MOV AL,hour
+        MOV BYTE PTR[BX+1],AL
+        MOV AL,tenMin
+        MOV BYTE PTR[BX+3],AL
+        MOV AL,minute
+        MOV BYTE PTR[BX+4],AL
+        MOV AL,tenSec
+        MOV BYTE PTR[BX+6],AL
+        MOV AL,second
+        MOV BYTE PTR[BX+7],AL
+
+        POP BX
         POP AX
         IRET            ;中断返回
 TIMER ENDP
@@ -636,13 +668,14 @@ TIMER ENDP
 DISP_CLK PROC
         PUSH BX
         PUSH AX
-        MOV BX,OFFSET tenHour
-        MOV CX,8
-DISP_LOOP:
-        MOV AL,[BX]     ;AL存待显示字符
-        CALL DISP_CHAR
-        INC BX
-        LOOP DISP_LOOP
+;         MOV BX,OFFSET tenHour
+;         MOV CX,8
+; DISP_LOOP:
+;         MOV AL,[BX]     ;AL存待显示字符
+;         CALL DISP_CHAR
+;         INC BX
+;         LOOP DISP_LOOP
+        SHOW_STR timerStr,20,5
         POP AX
         POP BX
         RET 
