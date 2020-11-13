@@ -1,20 +1,28 @@
+;--------------------------------------------------------------------------
+; Author: SimonKenneth                                                    ;
+; Date  : 2020/11/14                                                      ;
+; ID    : 2018211739                                                      ;
+;--------------------------------------------------------------------------
+
 DATA SEGMENT
-    EQUAL_STR DB "========================",0DH,0AH,'$'
-    MENU_TIP DB "Press an alphabet to select a function",0DH,0AH,'$'
-    TIPS1 DB "T:Show Time",0AH,0DH,'$'
-    TIPS2 DB "D:Show Date",0AH,0DH,'$'
-    TIPS4 DB "Q:Quit This Program",0AH,0DH,'$'
-    TIPS5 DB "Enter X,Y:",0AH,0DH,'$'
-    TIPSX DB 30 
-    TIPSY DB 0
+    ;--------------------显示菜单--------------------
+    EQUAL_STR DB "========================",'$'
+    MENU_TIP DB "Press an alphabet to select a function",'$'
+    TIPS1 DB     "| T:Show Time          |",'$'
+    TIPS2 DB     "| D:Show Date          |",'$'
+    TIPS3 DB     "| C:Start The Timer    |",'$'
+    TIPS4 DB     "| S:Stop The Timer     |",'$'
+    TIPS5 DB     "| R:Restart The Timer  |",'$'
+    TIPS6 DB     "| X:Surprise!          |",'$'    
+    TIPS7 DB     "| Q:Quit This Program  |",'$'
     LINE_BREAK DB 0AH,0DH,'$'
     authorInfo DB "(C) COPYRIGHT SimonKenneth 2020",'$'
-    BUFFER DB 100 DUP(0) ;通用缓冲区
+    BUFFER DB 100 DUP(0)        ;通用缓冲区
     ;--------------------显示日期时间所需变量--------------------
     DATE DB "DATE:","0000/00/00 000",'$','$'
     WEEK DB "MON","TUS","WED","THS","FRI","SAT","SUN" ;星期预定义
     TIME DB "00:00:00",'$','$'
-    DATE_X DB 20
+    DATE_X DB 20                ;图形模式下x坐标范围0~39,y坐标范围0~49 
     DATE_Y DB 20
     TIME_X DB 0
     TIME_Y DB 0
@@ -24,12 +32,12 @@ DATA SEGMENT
     y0 dw 0            	        ; 当前显示界面的纵坐标，初始为0
     handle dw ?                 ; 文件指针  
     bmpdata1 db 256*4 dup(?)    ; 存放位图文件调色板  
-    bmpdata2 db 64000 dup(0)    ; 存放位图信息,64k  
+    bmpdata2 db 63000 dup(0)    ; 存放位图信息,64k  
     bmpwidth dw ?               ; 位图宽度  
     bmplength dw ?              ; 位图长度 
     ;--------------------8253中断定时器所需变量--------------------
     count100 DB 100             ; 分频系数
-    tenHour db '0'                ; 小时的十位
+    tenHour db '0'              ; 小时的十位
     hour db '0',':'
     tenMin db '0'
     minute db '0',':'
@@ -41,6 +49,19 @@ DATA SEGMENT
     timer_tips db "The timer has been opened!",'$'
     secUpdate db 0
     timerStart_Flag db 0
+    timerStop_Flag db 0
+    ;--------------------绘制图形所需变量--------------------
+    gameMode db 0
+;     ball db 0,0,0,1,1,1,1,0,0,0
+;          db 0,1,1,1,1,1,1,1,1,0 
+;          db 0,1,1,1,1,1,1,1,1,0 
+;          db 1,1,1,1,1,1,1,1,1,1 
+;          db 1,1,1,1,1,1,1,1,1,1 
+;          db 1,1,1,1,1,1,1,1,1,1 
+;          db 1,1,1,1,1,1,1,1,1,1 
+;          db 0,1,1,1,1,1,1,1,1,0 
+;          db 0,1,1,1,1,1,1,1,1,0 
+;          db 0,0,0,1,1,1,1,0,0,0
 DATA ENDS
 
 STACK SEGMENT STACK 'STACK'
@@ -82,30 +103,37 @@ START:
 BEGIN:            
         SHOW_COLOR_CHAR 'X',0,0
         CALL CLR_SRC
-        CALL OPEN_PHOTO         ;从硬盘读取图片 
+        CALL OPEN_PHOTO                 ;从硬盘读取图片 
         CALL READ_PHOTO
         CALL SET_COLOR 
-        CALL SHOW_IMG           ;显示图片
-        CALL SHOW_TIPS          ;显示提示信息
-MAIN_LOOP:                      ;>>>>主循环<<<<
-        MOV AH,01H              ;键盘输入,不等待
+        CALL SHOW_IMG                   ;显示图片
+        CALL SHOW_TIPS                  ;显示提示信息
+MAIN_LOOP:                              ;>>>>主循环<<<<
+        MOV AH,01H                      ;键盘输入,不等待
         INT 16H     
         JNZ SCAN_BUTTON
-
-        CMP secUpdate,1         ;8253的秒位发生变化
-        JAE SEC_PASSED
-        CMP timerStart_Flag,1   ;启动8253定时器
-        JAE TIMER_START
-        CALL GET_TIME
+        CMP gameMode,1
+        JE gameLoop
+        CALL SHOW_TIME
+        CMP timerStop_Flag,1
+        JE NEXT1
+        CALL UPDATE_TIMER_STR
+        SHOW_STR timerStr,10,8
+        NEXT1:
+                CMP secUpdate,1                 ;8253的秒位发生变化
+                JAE SEC_PASSED
+                CMP timerStart_Flag,1           ;启动8253定时器
+                JE TIMER_START
+                CALL GET_TIME
         TIMER_START:
-                CALL SHOW_TIME
                 CALL UPDATE_TIMER_STR
-                SHOW_STR timerStr,15,15
-
                 JMP MAIN_LOOP
         SEC_PASSED:
                 MOV secUpdate,0
                 CALL GET_TIME_FROM_CLK
+                JMP MAIN_LOOP
+        gameLoop:
+                CALL SHOW_IMG
                 JMP MAIN_LOOP
         SCAN_BUTTON:
                 MOV AH,00H
@@ -116,12 +144,18 @@ MAIN_LOOP:                      ;>>>>主循环<<<<
                 JE PRESS_D
                 CMP AL,'q'
                 JE PRESS_Q
-                CMP AX,4b00h
+                CMP AX,4b00h            ;左方向键
                 JE MOVEL
-                CMP AX,4D00H
+                CMP AX,4D00H            ;右方向键
                 JE MOVER
                 CMP AL,'c'
                 JE PRESS_C
+                CMP AL,'s'
+                JE PRESS_S
+                CMP AL,'r'
+                JE PRESS_R
+                CMP AL,'x'
+                JE PRESS_X
                 JMP MAIN_LOOP
         MOVEL:  
                 SUB TIME_X,5
@@ -134,24 +168,32 @@ MAIN_LOOP:                      ;>>>>主循环<<<<
                 CALL SHOW_DATE
                 JMP MAIN_LOOP
         PRESS_T:
-                ; CALL SHOW_IMG
                 CALL GET_TIME            ;更新时间
                 CALL SHOW_TIME
                 JMP MAIN_LOOP
         PRESS_C:
-                ADD timerStart_Flag,1
-                CALL SHOW_IMG
-                ; SHOW_STR timer_tips,20,0
+                MOV timerStart_Flag,1
+                MOV timerStop_Flag,0
+                CALL CLR_TIMER
                 CALL CLR_TIMER_STR
                 CALL TIMER_INIT          ;定时器初始化
                 CALL TIMER_ENABLE        ;定时器使能
                 JMP MAIN_LOOP
+        PRESS_S:        
+                MOV timerStop_Flag,1
+                JMP MAIN_LOOP
+        PRESS_R:
+                CALL CLR_TIMER_STR
+                CALL CLR_TIMER
+                JMP MAIN_LOOP
+        PRESS_X:
+
         PRESS_Q:
                 JMP EXIT_MAIN
 EXIT_MAIN:
-        MOV AH,0                ;等待键盘输入后退出
-        INT 16H
-        mov ax, 3  	        ;返回80x25x16窗口
+        ; MOV AH,0                        ;等待键盘输入后退出
+        ; INT 16H
+        mov ax, 3  	                ;返回80x25x16窗口
         int 10h
         MOV AH,4CH
         INT 21H
@@ -183,12 +225,14 @@ CLR_SRC ENDP
 SHOW_TIPS PROC        
         PUSH AX
         PUSH DX
-        SHOW_STR EQUAL_STR,0,10
-        SHOW_STR MENU_TIP,1,10
-        SHOW_STR TIPS1,2,10
-        SHOW_STR TIPS2,3,10
-        SHOW_STR TIPS4,4,10
-        SHOW_STR EQUAL_STR,5,10
+        SHOW_STR EQUAL_STR,0,8
+        SHOW_STR TIPS1,1,8
+        SHOW_STR TIPS2,2,8
+        SHOW_STR TIPS3,3,8
+        SHOW_STR TIPS4,4,8
+        SHOW_STR TIPS5,5,8
+        SHOW_STR TIPS6,6,8
+        SHOW_STR EQUAL_STR,7,8
         POP DX
         POP AX
         RET
@@ -239,12 +283,12 @@ GET_TIME_FROM_CLK PROC FAR
         PUSH AX
         PUSH BX
         LEA BX,TIME
-        ADD [BX+7],1      ;秒个位
+        INC BYTE PTR[BX+7]      ;秒个位
         MOV AL,[BX+7]
         CMP AL,'9'
         JLE RET1
         MOV BYTE PTR[BX+7],'0'
-        ADD [BX+6],1      ;秒十位
+        INC BYTE PTR[BX+6]      ;秒十位
         MOV AL,[BX+6]
         CMP AL,'5'
         JLE RET1
@@ -620,7 +664,6 @@ TIMER PROC FAR
         MOV count100,100        ;1秒，计数溢出后重置计数器
         ADD secUpdate,1
 
-
         ; ADD TIME_X,1
         ; ADD TIME_Y,1
 
@@ -711,6 +754,16 @@ CLR_TIMER_STR PROC
         POP BX
         RET
 CLR_TIMER_STR ENDP
+
+CLR_TIMER PROC
+        MOV second,'0'
+        MOV tenSec,'0'
+        MOV minute,'0'
+        MOV tenMin,'0'
+        MOV hour,'0'
+        MOV tenHour,'0'
+        RET
+CLR_TIMER ENDP
 
 ; -----------DISP_CLK-----------
 ; 子程序名：DISP_CLK
