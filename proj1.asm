@@ -8,31 +8,36 @@ DATA SEGMENT
     ;--------------------显示菜单--------------------
     EQUAL_STR DB "========================",'$'
     MENU_TIP DB "Press an alphabet to select a function",'$'
-    TIPS1 DB     "| T:Show Time          |",'$'
-    TIPS2 DB     "| D:Show Date          |",'$'
-    TIPS3 DB     "| C:Start The Timer    |",'$'
-    TIPS4 DB     "| S:Stop The Timer     |",'$'
-    TIPS5 DB     "| R:Restart The Timer  |",'$'
-    TIPS6 DB     "| X:Surprise!          |",'$'    
-    TIPS7 DB     "| Q:Quit This Program  |",'$'
+    TIPS1 DB     10H," T:Show Time          ",11H,'$'
+    TIPS2 DB     10H," D:Show Date          ",11H,'$'
+    TIPS3 DB     10H," C:Start The Timer    ",11H,'$'
+    TIPS4 DB     10H," S:Stop The Timer     ",11H,'$'
+    TIPS5 DB     10H," R:Restart The Timer  ",11H,'$'
+    TIPS6 DB     10H," X:Surprise!          ",11H,'$'    
+    TIPS7 DB     10H," Q:Quit This Program  ",11H,'$'
     LINE_BREAK DB 0AH,0DH,'$'
-    authorInfo DB "(C) COPYRIGHT SimonKenneth 2020",'$'
+    authorInfo DB "Copyright (C) 2020 Simon",'$'
+    colorIndex DB 00H
+    colorHigh DB 00H
+    colorLow DB 09H
     BUFFER DB 100 DUP(0)        ;通用缓冲区
     ;--------------------显示日期时间所需变量--------------------
-    DATE DB "DATE:","0000/00/00 000",'$','$'
+    DATE DB "Date:0000/00/00 000",'$','$'
     WEEK DB "MON","TUS","WED","THS","FRI","SAT","SUN" ;星期预定义
     TIME DB "00:00:00",'$','$'
-    DATE_X DB 20                ;图形模式下x坐标范围0~39,y坐标范围0~49 
+    DATE_X DB 20                ;图形模式下x坐标范围0~49,y坐标范围0~39 
     DATE_Y DB 20
     TIME_X DB 0
     TIME_Y DB 0
+    showDate_Flag DB 0
     ;--------------------显示图片所需变量--------------------
-    bmpfname db '1.bmp', 0      ; 图片路径  
+    bmpfname db '1.bmp',0       ; 图片路径  
+    backGround db 'bg.bmp',0
     x0 dw 0  	                ; 当前显示界面的横坐标，初始为0
     y0 dw 0            	        ; 当前显示界面的纵坐标，初始为0
     handle dw ?                 ; 文件指针  
     bmpdata1 db 256*4 dup(?)    ; 存放位图文件调色板  
-    bmpdata2 db 63000 dup(0)    ; 存放位图信息,64k  
+    bmpdata2 db 61000 dup(0)    ; 存放位图信息,64k  
     bmpwidth dw ?               ; 位图宽度  
     bmplength dw ?              ; 位图长度 
     ;--------------------8253中断定时器所需变量--------------------
@@ -44,9 +49,6 @@ DATA SEGMENT
     tenSec db '0'
     second db '0'
     timerStr db "00:00:00:0",'$'
-    timer_x db 10
-    timer_y db 10
-    timer_tips db "The timer has been opened!",'$'
     secUpdate db 0
     timerStart_Flag db 0
     timerStop_Flag db 0
@@ -84,12 +86,12 @@ SHOW_STR MACRO STRING_NAME,STR_X,STR_Y
         MOV AH,09H
         INT 21h
         ENDM
-SHOW_COLOR_CHAR MACRO CHAR,CHX,CHY
+SHOW_COLOR_CHAR MACRO CHAR,CHX,CHY,COLOR,TIMES
         SET_SHOW_POS CHX,CHY
-        MOV CX,2
-        MOV AH,9
+        MOV CX,TIMES
+        MOV AH,09H
         MOV AL,CHAR
-        MOV BL,02H
+        MOV BL,COLOR
         INT 10H
         ENDM
 ;=====================宏定义END=======================
@@ -101,24 +103,34 @@ START:
 
 ;>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>主过程<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 BEGIN:            
-        SHOW_COLOR_CHAR 'X',0,0
+        CALL CLR_TIMER_STR
         CALL CLR_SRC
+        LEA DX, bmpfname
         CALL OPEN_PHOTO                 ;从硬盘读取图片 
         CALL READ_PHOTO
         CALL SET_COLOR 
         CALL SHOW_IMG                   ;显示图片
         CALL SHOW_TIPS                  ;显示提示信息
-MAIN_LOOP:                              ;>>>>主循环<<<<
+;------------------主循环------------------
+MAIN_LOOP:                              
         MOV AH,01H                      ;键盘输入,不等待
         INT 16H     
         JNZ SCAN_BUTTON
+
+        SHOW_COLOR_CHAR '=',0,8,colorIndex,24
+        MOV AL,colorIndex
+        ADD AL,30H
+
+        SHOW_COLOR_CHAR AL,0,0,09H,1
+
         CMP gameMode,1
         JE gameLoop
-        CALL SHOW_TIME
+        SHOW_STR TIME,9,16
+
         CMP timerStop_Flag,1
         JE NEXT1
-        CALL UPDATE_TIMER_STR
-        SHOW_STR timerStr,10,8
+        SHOW_STR timerStr,11,15
+
         NEXT1:
                 CMP secUpdate,1                 ;8253的秒位发生变化
                 JAE SEC_PASSED
@@ -159,13 +171,18 @@ MAIN_LOOP:                              ;>>>>主循环<<<<
                 JMP MAIN_LOOP
         MOVEL:  
                 SUB TIME_X,5
+                INC colorHigh
+                MOV AL,colorLow
+                OR AL,colorHigh
+                MOV colorIndex,AL
                 JMP MAIN_LOOP
         MOVER:
                 ADD TIME_Y,5
                 JMP MAIN_LOOP
         PRESS_D:
                 CALL GET_DATE
-                CALL SHOW_DATE
+                MOV showDate_Flag,1
+                SHOW_STR DATE,13,10
                 JMP MAIN_LOOP
         PRESS_T:
                 CALL GET_TIME            ;更新时间
@@ -185,11 +202,19 @@ MAIN_LOOP:                              ;>>>>主循环<<<<
         PRESS_R:
                 CALL CLR_TIMER_STR
                 CALL CLR_TIMER
+                SHOW_STR timerStr,11,15
                 JMP MAIN_LOOP
         PRESS_X:
-
+                CALL CLR_SRC
+                LEA DX,backGround
+                CALL OPEN_PHOTO
+                CALL READ_PHOTO
+                CALL SHOW_IMG
+                MOV gameMode,1
+                JMP MAIN_LOOP
         PRESS_Q:
                 JMP EXIT_MAIN
+;------------------主循环END------------------
 EXIT_MAIN:
         ; MOV AH,0                        ;等待键盘输入后退出
         ; INT 16H
@@ -225,14 +250,17 @@ CLR_SRC ENDP
 SHOW_TIPS PROC        
         PUSH AX
         PUSH DX
-        SHOW_STR EQUAL_STR,0,8
+        SHOW_COLOR_CHAR '=',0,8,03H,24
+        ; SHOW_STR EQUAL_STR,0,8
         SHOW_STR TIPS1,1,8
         SHOW_STR TIPS2,2,8
         SHOW_STR TIPS3,3,8
         SHOW_STR TIPS4,4,8
         SHOW_STR TIPS5,5,8
         SHOW_STR TIPS6,6,8
-        SHOW_STR EQUAL_STR,7,8
+        SHOW_COLOR_CHAR '=',7,8,08H,24
+        ; SHOW_STR EQUAL_STR,7,8
+        SHOW_STR authorInfo,49,0
         POP DX
         POP AX
         RET
@@ -459,14 +487,15 @@ PRINT_LINE_BREAK ENDP
 ; -----------OPEN_PHOTO-----------
 ; 子程序名：OPEN_PHOTO
 ; 功能: 打开图片文件
-OPEN_PHOTO proc near  
-    lea dx, bmpfname           
-    mov ah, 3dh  
-    mov al, 0  
-    int 21h  	
-    mov handle, ax  
-    ret  
-OPEN_PHOTO endp  
+; 入口参数：DX存图片路径名
+OPEN_PHOTO PROC NEAR  
+;     LEA DX, bmpfname           
+    MOV AH, 3DH  
+    MOV AL, 0  
+    INT 21h  	
+    MOV handle, AX  
+    RET  
+OPEN_PHOTO ENDP  
 
 ; -----------READ_PHOTO-----------
 ; 子程序名：READ_PHOTO
@@ -514,7 +543,7 @@ READ_PHOTO endp
 ; 子程序名：SET_COLOR
 ; 功能: 设置调色板输出色彩索引号及rgb数据共写256次   
 SET_COLOR proc near  
-;        设置256色,320*200像素    640*480
+        ;设置256色,320*200像素  640*480
        mov ax, 0013h  
        int 10h   
         ; MOV AX,4F02H
@@ -542,7 +571,7 @@ l0:    mov dx, 3c8h             ; 设定i/o端口
        mov al, [si]  		;b通道
        shr al, 1  
        shr al, 1  
-       out dx, al  
+       OUT dx, al  
        add si, 4  
        loop l0  
        ret  
@@ -664,9 +693,6 @@ TIMER PROC FAR
         MOV count100,100        ;1秒，计数溢出后重置计数器
         ADD secUpdate,1
 
-        ; ADD TIME_X,1
-        ; ADD TIME_Y,1
-
         INC second
         CMP second,'9'
         JLE TIMERX
@@ -702,7 +728,7 @@ TIMERX:
 
         POP BX
         POP AX
-        IRET            ;中断返回
+        IRET                    ;中断返回
 TIMER ENDP
 
 ; -----------UPDATE_TIMER-----------
@@ -714,6 +740,8 @@ UPDATE_TIMER_STR PROC
         PUSH DX
         ;00:00:00:0
         XOR AX,AX
+        CMP timerStart_Flag,0
+        JE EXIT_UPDATE_TIMER
         MOV AL,count100         
         MOV DX,10
         DIV DL                  ;AL存十位，AH存个位
@@ -734,6 +762,7 @@ UPDATE_TIMER_STR PROC
         MOV BYTE PTR[BX+6],AL
         MOV AL,second
         MOV BYTE PTR[BX+7],AL
+EXIT_UPDATE_TIMER:
         POP DX 
         POP BX 
         POP AX
@@ -771,14 +800,13 @@ CLR_TIMER ENDP
 DISP_CLK PROC
         PUSH BX
         PUSH AX
-;         MOV BX,OFFSET tenHour
-;         MOV CX,8
-; DISP_LOOP:
-;         MOV AL,[BX]     ;AL存待显示字符
-;         CALL DISP_CHAR
-;         INC BX
-;         LOOP DISP_LOOP
-        SHOW_STR timerStr,10,10
+        MOV BX,OFFSET tenHour
+        MOV CX,8
+DISP_LOOP:
+        MOV AL,[BX]     ;AL存待显示字符
+        CALL DISP_CHAR
+        INC BX
+        LOOP DISP_LOOP
         POP AX
         POP BX
         RET 

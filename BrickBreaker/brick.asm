@@ -1,4 +1,4 @@
-DATAS SEGMENT ;前280行为数据段
+DATAS segment ;前280行为数据段
     ;此处输入数据段代码  
     ;这些变量是用来给setarea传递参数，函数十四
     qidianx dw 0 ;起点x
@@ -12,7 +12,7 @@ DATAS SEGMENT ;前280行为数据段
     brick_color1 db 1111b;易碎砖块的颜色—高亮白色
     brick_color2 db 1010b;普通砖块的颜色—浅绿色
     brick_color3 db 0101b;硬质砖块的颜色—品红色
-    inmenu_color db 1110b; 内部菜单的颜色—黄色
+    inmenu_color db 1110b; 内部菜单的颜色—x黄色
     wave_brick_color db 1001b;飘动档板的颜色—浅蓝色 
     ;********************************************************* 
     exitflag dw 1;用来记录玩家什么时候要退出游戏，当为0时退出 
@@ -304,29 +304,29 @@ START:
     MOV AX,DATAS 
     MOV DS,AX 
     ;此处输入代码段代码  
-    mov ax,0 ;鼠标初始化选项
+    mov ax,0                            ;鼠标初始化选项
     int 33h 
-    cmp ax,0 ;在int 33h后检查ax的内容
-    jz exit ;如果ax=0，没有鼠标，退出
-	;将屏幕设置为320*200的显示分辨率，256色图形方式（VGA）
+    cmp ax,0                            ;在int 33h后检查ax的内容
+    jz exit                             ;如果ax=0，没有鼠标，退出
+	                                    ;将屏幕设置为320*200的显示分辨率，256色图形方式（VGA）
     mov ah,00 
     mov al,13h 
     int 10h 
 ;***********************************获取中断向量并保存 
-    mov al,1ch ;al=中断号 es:bx=中断向量，1c是计时器控制
-    mov ah,35h ;取中断向量
+    mov al,1ch                          ;al=中断号 es:bx=中断向量，1c是计时器控制
+    mov ah,35h                          ;取中断向量
     int 21h 
-    push es ;将附加段压入栈
+    push es                             ;将附加段压入栈
     push bx 
-    push ds ;将数据段压入栈
+    push ds                             ;将数据段压入栈
 ;***********************************置新的向量 
-    mov dx,offset zhongduan ;偏移地址，zhongduan是函数七
-    mov ax,seg zhongduan ;段地址
+    mov dx,offset zhongduan             ;偏移地址，zhongduan是函数七
+    mov ax,seg zhongduan                ;段地址
     mov ds,ax 
-    mov al,1ch ;al=中断号 ds:dx=中断向量，1c是计时器控制
-    mov ah,25h;设置中断向量 
+    mov al,1ch                          ;al=中断号 ds:dx=中断向量，1c是计时器控制
+    mov ah,25h                          ;设置中断向量 
     int 21h 
-    pop ds ;将数据段弹出栈
+    pop ds                              ;将数据段弹出栈
 ;***************************************************** 
     call inmenufun ;调用函数十八，开始进入画面
     call init ;调用函数十九，画出游戏初始界面
