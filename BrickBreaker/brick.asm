@@ -328,35 +328,35 @@ START:
     int 21h 
     pop ds                              ;将数据段弹出栈
 ;***************************************************** 
-    call inmenufun ;调用函数十八，开始进入画面
-    call init ;调用函数十九，画出游戏初始界面
+    call inmenufun                      ;调用函数十八，开始进入画面
+    call init                           ;调用函数十九，画出游戏初始界面
 next2: 
-    call mouse_racket ;调用函数十七，画出球拍的位置
-    cmp exitflag,0;判断退出位是否有效，0为有效，若有效则退出 
+    call mouse_racket                   ;调用函数十七，画出球拍的位置
+    cmp exitflag,0                      ;判断退出位是否有效，0为有效，若有效则退出 
     jz exit      
-    cmp stopflag,1;如果stopflag有效，则进入暂停状态 
+    cmp stopflag,1                      ;如果stopflag有效，则进入暂停状态 
     jne nostop 
-    call waitfun;调用函数六，暂停函数 
+    call waitfun                        ;调用函数六，暂停函数 
 nostop: 
     ;判断replay的标志位是否为有效，如果有效（1），那么就重新开局 
     cmp replayflag,1 
     jne noreplay 
-    call replayfun ;调用函数五，重玩
+    call replayfun                      ;调用函数五，重玩
 noreplay: 
     ;判断小球是不是已经都死光光了，如果是，那么调用函数，询问玩家是不是重新开局或者退出 
     cmp balldeadflag,1 
     jne noballdead 
-    call balldeadfun ;调用函数四，显示小球死光后的界面
+    call balldeadfun                    ;调用函数四，显示小球死光后的界面
 noballdead:  
 	;判断是否有炸弹特效，当为0时说明没有特效   
     cmp bomb_flag,1 
     jne nobomb 
-    call bomb_show ;调用函数一，炸弹特效
+    call bomb_show                      ;调用函数一，炸弹特效
 nobomb: 
     ;当所有的砖块都已经被击碎 
     cmp cmpgameflag,1 
     jne nocmpgame 
-    call cmpgamefun ;调用函数三，顺利通关
+    call cmpgamefun                     ;调用函数三，顺利通关
 nocmpgame:     
     jmp next2;循环，等待美妙18.2次的中断，对屏幕中的各个对象进行操作 
 exit: 
