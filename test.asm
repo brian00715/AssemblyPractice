@@ -1,65 +1,91 @@
-
-data segment
-    ; add your data here!
-    pkey db "press any key...$"
-ends
-
-stack segment
-    dw   128  dup(0)
-ends
-
-code segment
-SHOW_COLOR_CHAR MACRO CHAR,CHX,CHY,COLOR,TIMES
-        SET_SHOW_POS CHX,CHY
-        MOV CX,TIMES
-        MOV AH,09H
-        MOV AL,CHAR
-        MOV BL,COLOR
-        INT 10H
-        ENDM
-start:
-; set segment registers:
-    mov ax, data
-    mov ds, ax
-    mov es, ax
-
-    ; add your code here
-    SHOW_COLOR_CHAR 'A',
-
-loop:
-    mov al,[si]
-    and al,80h
-    jns step1  ;是正数则跳step1
-    jmp step2   ;负数跳step2
-step1:      
-    mov AL,[SI] 
-    MOV AL,[BX]
-    INC BX   
-    JMP NEXT
-step2:    
-    MOV [DX],[SI]      
-    INC DX
-    JMP NEXT
+PDATA SEGMENT
+	 X DB 10
+	 Y DB 40
+CHRTAB DW 5
+	   DB 01,0,0,0DBH,1,0,13H,1,0
+	   DB 2FH,-1,-1,5CH,0,2
+CHRTAB2 DW 5
+	   DB 00H,0,0,00H,1,0,00H,1,0
+	   DB 00H,-1,-1,00H,0,2
+PDATA ENDS
+;-------------------------------------
+STACKS SEGMENT PARA STACK'STACK'
+    DB 100 DUP(?)
+STACKS ENDS
+;-------------------------------------
+CODES SEGMENT
+    ASSUME CS:CODES,DS:PDATA,SS:STACKS
+START PROC FAR
+	PUSH DS
+	MOV AX,0
+	PUSH AX	
+    MOV AX,PDATA
+    MOV DS,AX
+;-------------------------------------
+	STI
+	MOV AL,02                    ;设置显示方式：80*25黑白
+	MOV AH,0
+	INT 10H
+;-------------------------------------
+	MOV DI,OFFSET CHRTAB
+	MOV CX,[DI]
+	MOV DH,X                     ;定参考点于X行Y列
+	MOV DL,Y
+	ADD DI,2
+;-------------------------------------	
+AGAIN:
 NEXT:
-    INC SI
-    DEC CX
-    JNZ LOOP
-    JMP STOP
-STOP:
-    MOV AH,4CH
-    INT 21H    
-    
-            
-    lea dx, pkey
-    mov ah, 9
-    int 21h        ; output string at ds:dx
-    
-    ; wait for any key....    
-    mov ah, 1
-    int 21h
-    
-    mov ax, 4c00h ; exit to operating system.
-    int 21h    
-ends
-
-end start ; set entry point and stop the assembler.
+	ADD DH,[DI+1]
+	ADD DL,[DI+2]
+	MOV AH,2                     ;显示字符图形
+	INT 10H
+	MOV AL,[DI]
+	PUSH CX
+	MOV CX,1
+	MOV AH,10
+	INT 10H
+	POP CX
+	ADD DI,3                      ;指向下一字符
+	LOOP NEXT
+	CALL SOFTDLY                  ;调用延时子程序
+;-------------------------------------
+	MOV DI,OFFSET CHRTAB2
+	MOV CX,[DI]
+	MOV DH,X
+	MOV DL,Y
+	ADD DI,2
+NEXT2:                            ;清除原图形
+	ADD DH,[DI+1]
+	ADD DL,[DI+2]
+	MOV AH,2
+	INT 10H
+	MOV AL,[DI]
+	PUSH CX
+	MOV CX,1
+	MOV AH,10
+	INT 10H
+	POP CX
+	ADD DI,3
+	LOOP NEXT2
+;-------------------------------------
+	INC Y                          ;改变参考点，实现人像的移动
+	MOV DI,OFFSET CHRTAB
+	MOV CX,[DI]
+	MOV DH,X
+	MOV DL,Y
+	ADD DI,2
+	JMP AGAIN
+	RET
+START ENDP
+;-------------------------------------
+SOFTDLY PROC                      ;定义延时子程序
+	MOV BL,100
+DELAY:MOV CX,2801
+WAITS:LOOP WAITS
+      DEC BL
+      JNZ DELAY
+	  RET
+SOFTDLY ENDP
+;-------------------------------------
+CODES ENDS
+    END START
