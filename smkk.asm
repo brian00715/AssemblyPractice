@@ -25,8 +25,8 @@ DATA SEGMENT
     DATE DB "DATE",1AH,"0000/00/00|000",'$','$'
     WEEK DB "MON","TUS","WED","THS","FRI","SAT","SUN" ;星期预定义
     TIME DB "00:00:00",'$','$'
-    DATE_X DB 20                ;图形模式下x坐标范围0~49,y坐标范围0~39 
-    DATE_Y DB 20
+    DATE_X DB 11                ;图形模式下x坐标范围0~49,y坐标范围0~39 
+    DATE_Y DB 13
     TIME_X DB 0
     TIME_Y DB 0
     CLK_NAME DB "CLK",'$'
@@ -89,7 +89,7 @@ DATA SEGMENT
                  DW 262,294,330,1,330,1,330,1,330,1,330,1,330,1,294,330,262,220,1
                  DW 220,262,1,262,1,262,1,262,1,294,1,294,1,294,262,1,262,1,262,-1
 
-    daoXiangTime DW 20, 20, 50, 2,20, 2, 20,2 ,30,2,30, 2,20, 2,20, 2,20, 2, 20, 20, 20, 20,5
+    daoXiangTime DW 40, 30, 50, 2,20, 2, 20,4 ,30,5,50, 2,20, 2,20, 2,20, 2, 20, 20, 20, 20,5
                  DW 40, 20, 20, 2,20, 4, 40,2, 25,2,25, 2,20, 2, 20, 20, 20, 20,5
                  DW 40, 15, 2, 30,2, 25,2,25, 2,35, 2,35, 2, 35,20, 2,35, 2,100
 DATA ENDS
@@ -617,14 +617,29 @@ MAIN_LOOP:
                         JMP MAIN_LOOP
                 PRESS_LEFT:  
                         ; INC colorIndex
+                        MOV AL,timerStart_Flag
+                        CMP AL,1
+                        JE EXIT_CHANGE_DATE_POS
+                        SUB DATE_X,2
+                        CALL SHOW_IMG
+                        CALL SHOW_TIPS
+                        SHOW_STR DATE,DATE_Y,DATE_X
                         JMP MAIN_LOOP
                 PRESS_RIGHT:
                         ; DEC colorIndex
+                        MOV AL,timerStart_Flag
+                        CMP AL,1
+                        JE EXIT_CHANGE_DATE_POS
+                        ADD DATE_X,2
+                        CALL SHOW_IMG
+                        CALL SHOW_TIPS
+                        SHOW_STR DATE,DATE_Y,DATE_X
+                        EXIT_CHANGE_DATE_POS:
                         JMP MAIN_LOOP
                 PRESS_D:
                         CALL GET_DATE
                         MOV showDate_Flag,1
-                        SHOW_STR DATE,13,11
+                        SHOW_STR DATE,DATE_Y,DATE_X
                         JMP MAIN_LOOP
                 PRESS_T:
                         JMP MAIN_LOOP
@@ -761,7 +776,7 @@ GET_TIME ENDP
 
 ; -----------GET_TIME_FROM_CLK-----------
 ; 子程序名：GET_TIME_FROM_CLK
-; 功能：利用中断定时器继续时钟计数
+; 功能：从定时器继续当前时钟
 ; note:由于定时中断服务程序占用了中断向量表中08H的位置，导致
 ;       INT21H中获取系统时间的功能无法继续使用，故需要此辅助
 ;       函数继续更新时间
@@ -965,7 +980,7 @@ OPEN_PHOTO ENDP
 
 ; -----------READ_PHOTO-----------
 ; 子程序名：READ_PHOTO
-; 功能: 读取图片文件，获取位图信息  
+; 功能: 读取图片文件，获取位图信息函数  
 READ_PHOTO proc near  
         ; 移动文件指针,bx = 文件代号， cx:dx = 位移量， al = 0 即从文件头绝对位移  
         mov ah, 42h  
@@ -1031,11 +1046,11 @@ SET_COLOR proc near
         shr al, 1                
         shr al, 1  
         out dx, al  
-        mov al, [si+1]  		;g通道	
+        mov al, [si+1]  	 ;g通道	
         shr al, 1  
         shr al, 1  
         out dx, al  
-        mov al, [si]  		;b通道
+        mov al, [si]  		 ;b通道
         shr al, 1  
         shr al, 1  
         OUT dx, al  
